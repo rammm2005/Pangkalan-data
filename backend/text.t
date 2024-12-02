@@ -59,10 +59,10 @@ def parse_excel_to_dataframe(excel_file, notes_dict):
     # Load specific sheet
     sheet_4220000 = load_excel_sheet(excel_file, '4220000')
 
-    # Fixed values
-    nama = "PT Bank Rakyat Indonesia (Persero) Tbk"
-    no_emiten = "BBRI"
-    kuartal = ["I", "II", "III", "IV"]  # Standard 4 quarters
+    # Extract 'nama_emiten', 'kode_emiten', and 'kuartal' directly from the Excel sheet
+    nama_emiten = sheet_4220000.iloc[0, 0]  # Assuming 'nama_emiten' is in the first row, first column
+    kode_emiten = sheet_4220000.iloc[1, 0]  # Assuming 'kode_emiten' is in the second row, first column
+    kuartal = sheet_4220000.iloc[2, 0]  # Assuming 'kuartal' is in the third row, first column
 
     # Extract columns for items and values
     item_column = sheet_4220000.iloc[3:, 0].reset_index(drop=True)  # Starting from A4
@@ -78,10 +78,10 @@ def parse_excel_to_dataframe(excel_file, notes_dict):
     data = []
     for i, (item, value) in enumerate(valid_data):
         note = notes_dict.get(item, "")  # Get notes for the item, or empty if none found
-        data.append([nama, no_emiten, kuartal[i % 4], value, item, note])
+        data.append([nama_emiten, kode_emiten, kuartal, value, item, note])
 
     # Create the DataFrame with proper columns
-    return pd.DataFrame(data, columns=['nama', 'no_emiten', 'kuartal', 'value', 'item', 'note'])
+    return pd.DataFrame(data, columns=['nama_emiten', 'kode_emiten', 'kuartal', 'value', 'item', 'note'])
 
 def save_to_mysql(df, table_name, host, user, db_name):
     """Save a DataFrame to a MySQL database."""
@@ -101,7 +101,7 @@ def save_to_mysql(df, table_name, host, user, db_name):
 
 # === MAIN SCRIPT === #
 if __name__ == "__main__":
-    # Extract notes from the PDF
+    # Extract notes from the PDF (optional, only if needed)
     notes_dict = extract_notes_from_pdf(PDF_FILE, pages=[384, 385, 386, 387])
     print("Extracted Notes Dictionary:", notes_dict)
 
