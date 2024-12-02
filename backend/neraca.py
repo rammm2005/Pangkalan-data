@@ -57,11 +57,17 @@ def extract_notes_from_pdf(pdf_file, pages):
 def parse_excel_to_dataframe(excel_file, notes_dict):
     """Parse data from Excel into a DataFrame."""
     # Load specific sheet
+    sheet_1000000 = load_excel_sheet(excel_file, '1000000')
     sheet_4220000 = load_excel_sheet(excel_file, '4220000')
+    
+    try:
+        nama = sheet_1000000.iloc[5, 1]  # Nama entitas di B6
+        no_emiten = sheet_1000000.iloc[7, 1]  # Kode entitas di B8
+    except Exception as e:
+        print(f"Error extracting entity name and code: {e}")
+        exit(1)
 
     # Fixed values
-    nama = "PT Bank Rakyat Indonesia (Persero) Tbk"
-    no_emiten = "BBRI"
     kuartal = ["I", "II", "III", "IV"]  # Standard 4 quarters
 
     # Extract columns for items and values

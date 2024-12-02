@@ -1,101 +1,79 @@
 import os
 from dotenv import load_dotenv
-import re
 import pandas as pd
 from sqlalchemy import create_engine, text
 from PyPDF2 import PdfReader
+import re
 
 load_dotenv()
 
 # === CONFIGURATION === #
-PDF_FILE = os.getenv('PDF_FILE')
 EXCEL_FILE = os.getenv('EXCEL_FILE')
+PDF_FILE = os.getenv('PDF_FILE')
 DB_HOST = os.getenv('DB_HOST')
 DB_USER = os.getenv('DB_USER')
-DB_NAME = os.getenv('DB_NAME')
-TABLE_NAME = os.getenv('TABLE_NAME')
+DB_NAME = 'pangkalan_data'
+TABLE_NAME = 'laporan_neraca'
 
 # === FUNCTIONS === #
-def load_excel_sheets(file_path):
-    """Load all sheets from an Excel file without headers."""
+def load_excel_sheet(file_path, sheet_name):
+    """Load a specific sheet from an Excel file."""
     try:
-        return pd.read_excel(file_path, sheet_name=None, header=None)
-    except FileNotFoundError:
-        print(f"Excel file not found: {file_path}")
-        exit(1)
+        return pd.read_excel(file_path, sheet_name=sheet_name, header=None)
     except Exception as e:
-        print(f"Error reading Excel file: {e}")
+        print(f"Error reading Excel sheet {sheet_name}: {e}")
         exit(1)
 
-def extract_text_from_pdf(file_path, pages):
-    """Extract text from specified pages of a PDF."""
+def extract_notes_from_pdf(pdf_file, pages):
+    """Extract notes from specified pages of the PDF."""
     try:
-        with open(file_path, 'rb') as pdf_file:
-            pdf_reader = PdfReader(pdf_file)
-            text = ""
+        with open(pdf_file, 'rb') as file:
+            reader = PdfReader(file)
+            notes_dict = {}
             for page_num in pages:
-                text += pdf_reader.pages[page_num - 1].extract_text()
-            print("Extracted Text from PDF (first 1000 characters):")
-            print(text[:1000])  # nge print 1000 kata dlu buar di verifikasi
-            return text
-    except FileNotFoundError:
-        print(f"PDF file not found: {file_path}")
-        exit(1)
+                page_text = reader.pages[page_num - 1].extract_text()
+                # Match items with their notes (e.g., "Kas" -> "2a, 2c, 3")
+                matches = re.findall(r"(Catatan\s*(\w+)).+?([^\n]+)", page_text, re.IGNORECASE)
+                for _, note, item in matches:
+                    item = item.strip()
+                    if item not in notes_dict:
+                        notes_dict[item] = []
+                    notes_dict[item].append(note.strip())
+            # Combine notes for each item into a single string
+            for key in notes_dict:
+                notes_dict[key] = ", ".join(set(notes_dict[key]))
+            return notes_dict
     except Exception as e:
-        print(f"Error extracting PDF data: {e}")
+        print(f"Error extracting notes from PDF: {e}")
         exit(1)
 
-def extract_metadata_from_pdf(text):
-    """Extract 'Nama Emiten' and 'Kode Emiten' from the PDF text."""
-    nama_emiten_match = re.search(r"Nama Emiten[:\s]*([A-Za-z0-9\s]+(?:\s*PT\s*[A-Za-z0-9\s]*)?)", text, re.IGNORECASE)
-    kode_emiten_match = re.search(r"Kode Emiten[:\s]*(\w+)", text, re.IGNORECASE)
-    kuartal_match = re.search(r"Kuartal\s*(I|II|III|IV|V|VI|VII|\d{1,2)", text, re.IGNORECASE)
-    notes_match = re.search(r"Catatan\s*([\d]+[a-z]?)", text, re.IGNORECASE)
+def parse_excel_to_dataframe(excel_file, notes_dict):
+    """Parse data from Excel into a DataFrame."""
+    # Load specific sheet
+    sheet_4220000 = load_excel_sheet(excel_file, '4220000')
 
-    if nama_emiten_match:
-        print(f"Nama Emiten Found: {nama_emiten_match.group(1)}")
-    else:
-        print("Nama Emiten not found.")
-    
-    if kode_emiten_match:
-        print(f"Kode Emiten Found: {kode_emiten_match.group(1)}")
-    else:
-        print("Kode Emiten not found.")
-        
-    if kuartal_match:
-        print(f"Kuartal Found: {kuartal_match.group(1)}")
-    else:
-        print("Kuartal not found.")
+    # Fixed values
+    nama = "PT Bank Rakyat Indonesia (Persero) Tbk"
+    no_emiten = "BBRI"
+    kuartal = ["I", "II", "III", "IV"]  # Standard 4 quarters
 
-    if notes_match:
-        print(f"Notes Found: {notes_match.group(1)}")
-    else: 
-        print(f"Notes Not Found") 
-    
-    nama_emiten = nama_emiten_match.group(1) if nama_emiten_match else "Unknown"
-    kode_emiten = kode_emiten_match.group(1) if kode_emiten_match else "Unknown"
-    kuartal = kuartal_match.group(1) if kuartal_match else "Unknown"
-    notes = notes_match.group(1) if notes_match else "Unknown"
-    return nama_emiten, kode_emiten, kuartal, notes
+    # Extract columns for items and nilai
+    item_column = sheet_4220000.iloc[3:, 0].reset_index(drop=True)  # Starting from A4
+    value_column = sheet_4220000.iloc[3:, 1].reset_index(drop=True)  # Starting from B4
 
-def parse_text_to_dataframe(text, nama_emiten, kode_emiten, kuartal, notes):
-    """Parse CALK text into a DataFrame with specific headers."""
-    rows = text.split("\n")
+    # Filter rows where nilai is numeric and not empty
+    valid_data = []
+    for item, value in zip(item_column, value_column):
+        if pd.notna(value) and isinstance(value, (int, float)):
+            valid_data.append((item, value))
+
+    # Combine into a DataFrame
     data = []
-    for row in rows:
-        print(f"Row: {row}")  # Debug: lihat setiap baris teks yang diproses
-        cells = row.split()
-        if len(cells) >= 5:  
-            print(f"Parsed Cells: {cells}")  # Debug: lihat hasil pemisahan
-            data.append([
-                nama_emiten,                   # Nama Emiten (fixed)
-                kode_emiten,                   # Kode Emiten (fixed)
-                kuartal,                       # Kuartal (fixed)
-                cells[0].strip(),              # Value
-                cells[1].strip(),              # Item
-                notes                          # Notes
-            ])
-    return pd.DataFrame(data, columns=['Nama Emiten', 'Kode Emiten', 'Kuartal', 'Value', 'Item', 'Notes'])
+    for i, (item, value) in enumerate(valid_data):
+        note = notes_dict.get(item, "")  # Get notes for the item, or empty if none found
+        data.append([nama, no_emiten, kuartal[i % 4], value, item, note])
+
+    return pd.DataFrame(data, columns=['nama', 'no_emiten', 'kuartal', 'nilai', 'item', 'notes'])
 
 def save_to_mysql(df, table_name, host, user, db_name):
     """Save a DataFrame to a MySQL database."""
@@ -115,19 +93,14 @@ def save_to_mysql(df, table_name, host, user, db_name):
 
 # === MAIN SCRIPT === #
 if __name__ == "__main__":
-    # Load Excel sheets for inspection
-    sheets = load_excel_sheets(EXCEL_FILE)
-    print("Loaded Excel sheets:")
-    for sheet_name, sheet_df in sheets.items():
-        print(f"\nSheet: {sheet_name}\n", sheet_df.head()) 
-    
-    # Extract text from the PDF and metadata
-    pdf_text = extract_text_from_pdf(PDF_FILE, pages=[384 , 385, 386, 387])  # cathing data from the PDF of the page (jadi range halamannnya di check)
-    nama_emiten, kode_emiten, kuartal, notes = extract_metadata_from_pdf(pdf_text)
-    
-    # Parse the extracted text into a DataFrame
-    df = parse_text_to_dataframe(pdf_text, nama_emiten, kode_emiten, kuartal, notes)
+    # Extract notes from the PDF
+    notes_dict = extract_notes_from_pdf(PDF_FILE, pages=[384, 385, 386, 387])
+    print("Extracted Notes Dictionary:", notes_dict)
+
+    # Parse Excel data into DataFrame
+    df = parse_excel_to_dataframe(EXCEL_FILE, notes_dict)
     print("\nParsed DataFrame:")
     print(df.head())
 
+    # Save DataFrame to MySQL
     save_to_mysql(df, TABLE_NAME, DB_HOST, DB_USER, DB_NAME)
