@@ -35,7 +35,7 @@ def extract_notes_from_pdf(pdf_file, pages):
                 page_text = reader.pages[page_num - 1].extract_text()
 
                 # Regex to detect notes like "2e,2f,2i,4" following items
-                matches = re.findall(r"(?P<item>[\w\s]+?)\s(?P<notes>(\d+[a-z]{1,2}(?:,\d+[a-z]{1,2})*(?:,\d+)*))", page_text, re.IGNORECASE)
+                matches = re.findall(r"(?P<item>[\w\s]+?)\s(?P<notes>(\d+[a-z]{1,2}(?:,\d+[a-z]{1,2})(?:,\d+)))", page_text, re.IGNORECASE)
 
                 # Add to dictionary
                 for match in matches:

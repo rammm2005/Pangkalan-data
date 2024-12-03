@@ -56,6 +56,7 @@ def extract_and_organize_text(file_path, start_page, end_page):
                         "content": "\n".join(current_content).strip(),
                     })
                 current_title = line.strip()
+                print("curent title: " + current_title)
                 current_subtitle = None
                 current_content = []
             elif re.match(r"^[a-z]+\.\s", line):  # Matches "a. Pendirian"
