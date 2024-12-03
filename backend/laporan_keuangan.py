@@ -6,6 +6,7 @@ from PyPDF2 import PdfReader
 import re
 import difflib
 
+# === Load environment variables === #
 load_dotenv()
 
 # === CONFIGURATION === #
@@ -79,9 +80,15 @@ def parse_excel_to_dataframe(excel_file, notes_dict, report_type='neraca'):
         print(f"Error extracting entity name and code: {e}")
         exit(1)
 
-    # Standard 4 quarters (Kuartal)
-    kuartal = ["I", "II", "III", "IV"]
-    
+    # Mapping file names to quarter
+    kuartal_map = {
+        'FinancialStatement-2023-I-BBRI.xlsx': 'I',
+        'FinancialStatement-2023-II-BBRI.xlsx': 'II',
+        'FinancialStatement-2023-III-BBRI.xlsx': 'III',
+        'FinancialStatement-2023-Tahunan-BBRI.xlsx': 'IV',
+    }
+    quartal = kuartal_map.get(os.path.basename(excel_file), 'Unknown')
+
     # Load the relevant sheet based on report type
     if report_type == 'neraca':
         sheet_4220000 = load_excel_sheet(excel_file, '4220000')
@@ -123,7 +130,7 @@ def parse_excel_to_dataframe(excel_file, notes_dict, report_type='neraca'):
             print(f"Failed to match item: {item}")
         
         # Prepare data for DataFrame
-        data.append([no_emiten, nama, kuartal[i % 4], grup_lk, item, value, matched_note])
+        data.append([no_emiten, nama, quartal, grup_lk, item, value, matched_note])
 
     # Create the DataFrame with proper columns
     return pd.DataFrame(data, columns=['kode_emiten', 'nama_emiten', 'quartal', 'grup_lk', 'item', 'nilai', 'catatan'])
@@ -177,12 +184,12 @@ if __name__ == "__main__":
     print("\nParsed Laba Rugi DataFrame:")
     print(df_laba_rugi.head())
 
+    # Parse Laporan Arus Kas data from Excel
     df_arus_kas = parse_excel_to_dataframe(EXCEL_FILE, notes_dict, report_type='arus_kas')
     print("\nParsed Arus Kas DataFrame:")
     print(df_arus_kas.head())
 
-
     df_combined = pd.concat([df_neraca, df_laba_rugi, df_arus_kas], ignore_index=True)
 
-    # Parse Laporan Arus Kas data from Excel
-    save_to_mysql(df_combined, 'laporan_keuangan', DB_HOST, DB_USER, DB_NAME)
+    # Save to MySQL
+    save_to_mysql(df_combined, TABLE_NAME, DB_HOST, DB_USER, DB_NAME)
