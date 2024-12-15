@@ -131,7 +131,7 @@ if __name__ == "__main__":
         print("PDF file not found. Please check the path in the .env file.")
     else:
         # Extract and organize text
-        organized_text = extract_and_organize_text(PDF_FILE, 395, 453)
+        organized_text = extract_and_organize_text(PDF_FILE, 395, 454)
         if organized_text:
             # Save organized text to the database
             save_to_database(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, TABLE_NAME, organized_text)
